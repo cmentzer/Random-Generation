@@ -1,0 +1,87 @@
+#lang racket
+
+(require redex 
+         "grammar.rkt"
+         "type_judgment.rkt"
+         "lib.rkt")
+
+(provide (all-defined-out))
+
+(define-judgment-form L
+  #:mode (gen I I I O)
+  #:contract (gen Γ τ n e)
+  
+  ;; decrease depth 
+  [(gen Γ τ ,(- (term n+) 1) e)
+   -------------------
+   (gen Γ τ n+ e)]
+  
+  ;; 1 argument λ
+  [(where χ ,(get-next-sym))
+   (gen (+env Γ χ τ_1) τ_2 n e)
+   --------------------
+   (gen Γ (-> τ_1 τ_2) n (λ ((χ τ_1)) e))]
+  
+  ;; 0 argument λ
+  [(gen Γ τ_2 n e)
+   -------------------
+   (gen Γ (-> τ_2) n (λ () e))]
+  
+  ;; 0 argument function application
+  [(where τ_1 num)
+   (gen Γ (-> τ_1) ,(- (term n+) 1) e_1)
+   --------------------
+   (gen Γ τ_1 n+ (e_1))]
+  
+  ;; function application
+  [(where τ_1 ,(random-type))
+   (gen Γ (-> τ_1 τ_2) ,(- (term n+) 1) e_1)
+   (gen Γ τ_1 ,(- (term n+) 1) e_2)    
+   --------------------
+   (gen Γ τ_2 n+ (e_1 e_2))]
+  
+  ;; ====== built-in functions =====
+  
+  [(gen Γ num ,(- (term n+) 1) e_1)
+   (gen Γ num ,(- (term n+) 1) e_2)
+   --------------------
+   (gen Γ num n+ (+ e_1 e_2))]
+  
+  ;; ====== generate a list ======
+  [(gen/list Γ (Listof τ) ,(random 10) l)
+   --------------------
+   (gen Γ (Listof τ) 0 l)]
+  
+  ;; ====== level 0 forms ======
+  
+  ;; an expression e can be an already bound variable ...
+  [;(side-condition ,(prob 0.5))
+   (where χ (get-bound-var Γ τ))
+   --------------------
+   (gen Γ τ 0 χ)]
+  
+  ;; ... or it can be a number
+  [;(side-condition ,(prob 0.5))
+   --------------------
+   (gen Γ num 0 ,(random 100))]
+  
+  ;; or a boolean
+  [--------------------
+   (gen Γ bool 0 #t)]
+  
+  ;; or an empty list
+  [--------------------
+   (gen Γ (Listof τ) 0 empty)])
+
+
+(define-judgment-form L
+  #:mode (gen/list I I I O)
+  #:contract (gen/list Γ τ n l)
+  
+  [(gen Γ τ 0 e)
+   (gen/list Γ (Listof τ) ,(- (term n+) 1) l)
+   --------------------
+   (gen/list Γ (Listof τ) n+ (cons e l))]
+   
+   [-------------------
+    (gen/list Γ (Listof τ) 0 empty)])

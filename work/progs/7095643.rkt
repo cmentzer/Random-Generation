@@ -1,0 +1,1 @@
+(module f racket (provide (contract-out (f (-> (or (>=/c 8) (>/c 32)) (and int? (</c 40)))))) (define (f x) x))

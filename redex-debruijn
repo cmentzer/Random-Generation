@@ -1,0 +1,283 @@
+#lang racket
+(require redex)
+
+;;holds all bound identifiers
+(define env (box '()))
+;;keeps track of the depth of the current scope as a list of numbers
+;;each element represents a level of depth and the value of that element 
+;;represents the number of refs at that depth
+(define scope (box (list 0)))
+;;defines the number of arguments to generated functions
+(define arg-count (box 1))
+
+(define args (box 0))
+
+;;the grammar for our subset of racket
+(define-language L
+  ;;a program is some number of modules
+  (program (sub-module-form))
+  ;(program (sub-module-form sub-module-form ...))
+  ;;A sub-module-form is a module with unique "name" identifier
+  ;;and containing some number of "body" expressions
+  (sub-module-form (module module-name racket body body ...))
+  ;;A body expression is some number of function or variable definitions, 
+  ;;constrained appropriately. 
+  (body
+   ;;function definition
+   (side-condition
+    (define/contract (id_1 id ..._2) restricted-contract value)
+    (begin (printf "attempting to generate a function with (~a) inputs: current attempt: ~a~n" (unbox arg-count) (term ..._2))
+           ;;ensure that the function has the appropriate number of arguments
+           (if (= (term ..._2) 
+                  (unbox arg-count)) 
+               ;;add the function identifier to the environment
+               (begin (set-box! env (append (list (term id_1)) (unbox env)))
+                      (printf "appending ~a to env~n" (term id_1))
+                      #t)
+               #f)))
+   ;;
+   (side-condition
+    (define id_2 value)
+    (begin (set-box! env (append (list (term id_2)) (unbox env)))
+           (printf "appending ~a to env~n" (term id_2))
+           (printf "env is now ~a~n" (unbox env))
+           #t)))
+  ;(require require-spec require-spec ...)
+  ;((struct id (id ...)) (struct id (id ...)) ...)
+  ;provide bound-id?) 
+  (restricted-contract 
+   (side-condition 
+    (-> contract ..._1 contract_2)
+    (begin (printf "attempting to generate a contract that matches the number of inputs (~a): current attempt ~a~n" 
+                   (unbox arg-count) (term ..._1))
+           (and (= (term ..._1) (unbox arg-count))))))
+  ;(struct id ([id contract] [id contract] ...)))
+  ;(require-spec (submod ".." module-name))
+  (module-name (side-condition id_1 (begin (set-box! env (append (list (term id_1)) (unbox env)))
+                                           (printf "appending ~a to env~n" (term id_1))
+                                           (printf "env is now ~a~n" (unbox env))
+                                           #t)))
+  (contract predicate
+            any/c)
+  ; (or/c contract contract contract ...) 
+  ; (and/c contract contract contract ...))
+  (predicate integer?
+             number?
+             boolean?
+             real?)
+  (expr value
+        ;lam
+        ;(if expr expr expr)
+        ;funapp
+        )
+  (lam (side-condition
+        (λ (t ..._1) expr)
+        (begin (printf "uhhhhh ~a~n" (term ..._1))
+               (if (= (term ..._1) (unbox args))
+                   (begin (set-box! args (term ..._1))
+                          #t)
+                   #f))))
+  (funapp (side-condition 
+           (lam_1 expr)
+           (fun? (term lam_1)))
+          (side-condition
+           (bound-id_1 expr)
+           (fun? (term bound-id_1))))
+  (value ;number
+   ;integer
+   ;boolean
+   ;op
+   bound-id
+   ;id
+   )
+  (op (+ expr expr expr ...)
+      (- expr expr)
+      (* expr expr expr ...)
+      (/ expr expr))
+  (bound-id
+   ;(side-condition
+   ; id_1
+   ; (member (term id_1) (unbox env)))
+   ref)
+  (ref (@ depth-value_1 ref-value_2))
+  (depth-value
+   (side-condition
+    natural_1
+    (begin (printf "depth ~a " (term natural_1))
+           (<= (term natural_1) 0))))
+  (ref-value
+   (side-condition
+    natural_1
+    (begin (let [(a (random 3))]
+             (printf "ref # ~a " (term natural_1))
+             (< (term natural_1) a)
+             (set-box! args a)))))
+  (id variable-not-otherwise-mentioned)
+  ;;types  
+  (Γ · ((id : t) ... Γ))
+  (t num
+     int
+     bool
+   ;  (-> t t ...)
+     ))
+
+;; define the behavior of types inside the language
+(define-judgment-form L
+  #:mode (types I I O)
+  #:contract (types Γ expr t) 
+  
+  ;; function application
+  [(types Γ expr_1 (-> t_1 t_2))
+   (types Γ expr_2 t_1)
+   -------------------------
+   (types Γ (expr_1 expr_2) t_2)]
+  
+  ;; function application with 0 arguments (for (λ () ?))
+  [(types Γ expr_1 (-> t_1))
+   -------------------------
+   (types Γ (expr_1) t_1)]
+  
+  #;[(types Γ expr t_1)
+     ------------------
+     (types Γ (λ () expr) (-> proc t_1))]
+  
+  [(types ((id : t) ... Γ) expr t_3)
+   -----------------------------------
+   (types Γ (λ ((id t) ...) expr) (-> t ... t_3))]
+  
+  [(types ((id : t_1) Γ) bound-id t_2)
+   -----------------------------------
+   (types Γ (λ (id t_1) bound-id) (-> t_1 t_2))]
+  
+  ;[(types Γ expr (→ (→ t_1 t_2) (→ t_1 t_2)))
+  ; ---------------------------------------
+  ; (types Γ (fix expr) (→ t_1 t_2))]
+  
+  [---------------------
+   (types ((id : t) Γ) id t)]
+  
+  [(types Γ id_1 t_1)
+   (side-condition (different id_1 id_2))
+   ------------------------------------
+   (types ((id_2 : t_2) Γ) id_1 t_1)]
+  
+  [(types Γ expr int) ...
+   ------------------------
+   (types Γ (+ expr ...) int)]
+  
+  [(types Γ expr int) ...
+   -----------------------
+   (types Γ (- expr ...) int)]
+  
+  [(types Γ expr num) ...
+   (side-condition (not (= 0 num)))
+   -----------------------
+   (types Γ (/ expr ...) num)]
+  
+  [(types Γ expr int) ...
+   -----------------------
+   (types Γ (* expr ...) int)]
+  
+  
+  [--------------------
+   (types Γ number num)]
+  
+  [--------------------
+   (types Γ boolean bool)]
+  
+  [--------------------
+   (types Γ integer int)]
+  
+  [(types Γ expr_1 t_1)
+   (types Γ expr_2 t_2)
+   (types Γ expr_3 t_2)
+   -----------------------------
+   (types Γ (if expr_1 expr_2 expr_3) t_2)])
+
+
+;; use pattern matching to convert the generated program to the appropriate format
+
+#;(define-metafunction L
+    proc? : expr -> boolean
+    [(proc? expr) (foo expr)])
+
+(define (fun? e)
+  (let ([term (term ,e)])
+    (printf "~a~n" term)
+    (judgment-holds
+     (types ·
+            ,term
+            (-> t ...)))))
+
+
+
+;;returns the largest element in a list of numbers
+(define (max-list l)
+  (max-list-helper l 0))
+
+(define (max-list-helper l a)
+  (cond
+    ([empty? l] a)
+    ([> (first l) a] (max-list-helper (rest l) (first l)))
+    (else (max-list-helper (rest l) a))))
+
+;; different syntactic categories for each type?
+
+#|
+;;TESTS
+(test-equal
+ (judgment-holds
+  @(types · (λ (num) )
+         t) t)
+ (list (term (-> num num))))
+
+(test-equal
+ (judgment-holds
+  (types ·
+         ((λ ((x num)) 1) 1)
+         t) t)
+ '(int num))
+
+(test-equal
+ (judgment-holds
+  (types ·
+         (λ () 1)
+         t) t)
+ '((-> int) (-> num)))
+
+(test-equal
+ (judgment-holds
+  (types ·
+         (+ ((λ ((x num)) 1) 1) 1)
+         t) t)
+ '(int))
+
+(test-equal
+ (judgment-holds
+  (types ·
+         (* ((λ ((x num)) 1) 1) 1)
+         t) t)
+ '(int))
+
+(test-equal
+ (judgment-holds
+  (types ·
+         (/ ((λ ((x num)) 1) 1) 1)
+         t) t)
+ '(num))
+
+(test-equal
+ (judgment-holds
+  (types ·
+         (- ((λ ((x num)) 1) 1) 1)
+         t) t)
+ '(int))
+
+(test-equal
+ (judgment-holds
+  (types ·
+         (+ (if ((λ ((x num)) 1) 1) 2 3) 4)
+         t) t)
+ '(int))
+(generate-term L value 3)
+|#

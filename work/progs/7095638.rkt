@@ -1,0 +1,1 @@
+(module f racket (provide (contract-out (f (-> (>=/c 64) (and any/c (</c 61)))))) (define (f x) 18))

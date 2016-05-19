@@ -1,0 +1,1 @@
+(module f racket (provide (contract-out (f (-> (and any/c (=/c 65)) any/c)))) (define (f x) ((λ () x))))

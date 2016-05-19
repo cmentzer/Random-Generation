@@ -1,0 +1,13 @@
+#lang racket
+
+
+(define string "(module f racket (provide (contract-out (f (-> integer? integer?)))) (define (f n) ((λ ((L bool)) (+ n n)) #t)))")
+
+(regexp-match #rx"(\\(λ \\(\\(.+\\)\\) .+\\)) " string)
+
+
+(regexp-replace #rx"(\\)\\))"
+                (regexp-replace #rx"(\\(\\()" 
+                                (second (regexp-match #rx"(\\(λ \\(\\(.+\\)\\) .+\\)) " string)) 
+                                "(")
+                ")")

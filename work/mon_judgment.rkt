@@ -1,0 +1,21 @@
+#lang racket
+
+(require redex
+         "grammar.rkt"
+         "gen_judgment.rkt"
+         "contract_judgment.rkt")
+
+(provide (all-defined-out))
+
+
+;; this judgment form combines several lower level judgment forms
+;; to create a single cohesive expression with a single type and
+;; the form (contract/out "contract" "expression")
+(define-judgment-form L
+  #:mode (mgen I I I I I O)
+  #:contract (mgen Γ τ n n n m)
+  
+  [(gen Γ τ n_1 e)
+   (contract Γ τ n_2 n_3 contract)
+   -------------------
+   (mgen Γ τ n_2 n_3 n_1 (contract-out contract e))])

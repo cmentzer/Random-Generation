@@ -1,0 +1,1 @@
+(module f racket (provide (contract-out (f (-> any/c (=/c 73))))) (define (f x) ((λ ((H num)) H) 8)))

@@ -1,0 +1,7 @@
+#lang racket
+(require redex
+         "common.rkt"
+         "extend-lookup.rkt")
+
+(define-extended-language ImperativeCalculus Assignments
+  (e ::= .... (letrec ((x v) ...) e)))

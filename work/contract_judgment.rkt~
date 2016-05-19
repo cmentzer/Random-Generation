@@ -1,0 +1,16 @@
+#lang racket
+
+(require redex
+         "grammar.rkt"
+         "lib.rkt"
+         "gen_judgment.rkt"
+         "pred_judgment.rkt")
+
+(define-judgment-form L
+  #:mode (mgen I I I I O)
+  #:contract (mgen Γ τ n n m)
+  
+  [(pred Γ τ n_1 pred_1)
+   (pred Γ τ n_2 pred_2)
+   -------------------
+   (mgen Γ τ n_1 n_2 (-> pred_1 pred_2))])
